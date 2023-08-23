@@ -1,9 +1,11 @@
 const userModel = require("../model/userModel");
-
+const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs')
 
 const registerController = async (req, res) => {
+    const { username, email, password } = req.body;
     try {
-        const existingUser = await userModel.findOne({ username: req.body.username })
+        const existingUser = await userModel.findOne({ username: username })
 
         //validation
         if (existingUser) {
@@ -13,13 +15,26 @@ const registerController = async (req, res) => {
             })
         }
 
-        //rest data
-        const user = new userModel(req.body)
-        await user.save()
+        //hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await userModel.create({
+            username: username,
+            email: email,
+            password: hashedPassword,
+
+        })
+        //generate token
+        const token = jwt.sign({ username: result.username, id: result._id }, process.env.JWT_SECRET);
+
+
+
+
         return res.status(201).send({
+            user: result,
+            token: token,
             success: true,
             message: 'Registered Successfully',
-            user,
+
         })
     } catch (error) {
         console.log(error)
@@ -33,6 +48,7 @@ const registerController = async (req, res) => {
 
 //login call back
 const loginController = async (req, res) => {
+    const { username, password } = req.body;
     try {
         const user = await userModel.findOne({ username: req.body.username })
 
@@ -44,10 +60,21 @@ const loginController = async (req, res) => {
             })
         }
 
+
+        //Compare password 
+        const matchPassword = await bcrypt.compare(password, user.password);
+
+        if (!matchPassword) {
+            return res.status(400).json({ message: 'Invalid Username or Password' })
+        }
+
+        const token = jwt.sign({ username: user.username, id: user._id }, process.env.JWT_SECRET);
+
         return res.status(200).send({
             success: true,
             message: 'Login Successfully',
-            user,
+            user: user,
+            token: token,
         })
     } catch (error) {
         console.log(error)
